@@ -39,12 +39,19 @@ private:
 	static void UpdateLedStateEventHandler(const AppEvent &event);
 	static void FunctionHandler(const AppEvent &event);
 	static void FunctionTimerEventHandler(const AppEvent &event);
+	static void FunctionSensorActivateEventHandler(const AppEvent &event);
+	static void FunctionSensorDeactivateEventHandler(const AppEvent &event);
+	static void FunctionSensorFetchEventHandler(const AppEvent &event);
 
 	static void ChipEventHandler(const chip::DeviceLayer::ChipDeviceEvent *event, intptr_t arg);
 	static void ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged);
 	static void LEDStateUpdateHandler(LEDWidget &ledWidget);
 	static void FunctionTimerTimeoutCallback(k_timer *timer);
+	static void FunctionSensorTimeoutCallback(k_timer *timer);
 	static void UpdateStatusLED();
+
+	static void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath & attributePath, uint8_t type,
+                                       uint16_t size, uint8_t * value);
 
 	FunctionEvent mFunction = FunctionEvent::NoneSelected;
 	bool mFunctionTimerActive = false;

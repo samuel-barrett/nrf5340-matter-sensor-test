@@ -15,6 +15,7 @@
 #include <platform/CHIPDeviceLayer.h>
 
 #include "board_util.h"
+#include <app-common/zap-generated/attributes/Accessors.h>
 #include <app/server/OnboardingCodesUtil.h>
 #include <app/server/Server.h>
 #include <credentials/DeviceAttestationCredsProvider.h>
@@ -50,6 +51,7 @@ constexpr uint32_t kFactoryResetTriggerTimeout = 6000;
 
 K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
 k_timer sFunctionTimer;
+k_timer sSensorTimer;
 
 LEDWidget sStatusLED;
 #if NUMBER_OF_LEDS == 2
@@ -155,6 +157,10 @@ CHIP_ERROR AppTask::Init()
 	k_timer_init(&sFunctionTimer, &AppTask::FunctionTimerTimeoutCallback, nullptr);
 	k_timer_user_data_set(&sFunctionTimer, this);
 
+	/* Initialize sensor timer */
+	k_timer_init(&sSensorTimer, &AppTask::FunctionSensorTimeoutCallback, nullptr);
+	k_timer_user_data_set(&sSensorTimer, this);
+
 	/* Initialize CHIP server */
 #if CONFIG_CHIP_FACTORY_DATA
 	ReturnErrorOnFailure(mFactoryDataProvider.Init());
@@ -241,6 +247,38 @@ void AppTask::FunctionTimerEventHandler(const AppEvent &)
 
 		chip::Server::GetInstance().ScheduleFactoryReset();
 	}
+}
+
+void AppTask::FunctionSensorTimeoutCallback(k_timer * timer) {
+	if (!timer) {
+		return;
+	}
+
+	AppEvent event;
+	event.Type = AppEventType::SensorFetch;
+	event.TimerEvent.Context = k_timer_user_data_get(timer);
+	event.Handler = FunctionSensorFetchEventHandler;
+	PostEvent(event);
+}
+
+void AppTask::FunctionSensorActivateEventHandler(const AppEvent &event)
+{
+	k_timer_start(&sSensorTimer, K_SECONDS(1), K_SECONDS(1));
+}
+
+void AppTask::FunctionSensorDeactivateEventHandler(const AppEvent &event)
+{
+	k_timer_stop(&sSensorTimer);
+}
+
+void AppTask::FunctionSensorFetchEventHandler(const AppEvent &event)
+{
+	/* Simulate sensor for now */
+	static int16_t celsiusDegrees = 0;
+	++celsiusDegrees;
+	celsiusDegrees %= 40;
+	chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(
+                /* endpoint ID */ 1, /* temperature in 0.01*C */ celsiusDegrees * 100);
 }
 
 void AppTask::FunctionHandler(const AppEvent &event)
