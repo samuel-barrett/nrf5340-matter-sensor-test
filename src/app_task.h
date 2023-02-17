@@ -7,7 +7,6 @@
 #pragma once
 
 #include "app_event.h"
-#include "led_widget.h"
 
 #include <platform/CHIPDeviceLayer.h>
 
@@ -27,6 +26,11 @@ public:
 
 	CHIP_ERROR StartApp();
 
+	void UpdateClusterState();
+	/*PWMDevice &GetPWMDevice() { 
+		return mPWMDevice; 
+	}*/
+
 	static void PostEvent(const AppEvent &event);
 
 private:
@@ -39,23 +43,27 @@ private:
 	static void UpdateLedStateEventHandler(const AppEvent &event);
 	static void FunctionHandler(const AppEvent &event);
 	static void FunctionTimerEventHandler(const AppEvent &event);
-	static void FunctionSensorActivateEventHandler(const AppEvent &event);
-	static void FunctionSensorDeactivateEventHandler(const AppEvent &event);
-	static void FunctionSensorFetchEventHandler(const AppEvent &event);
+	static void FunctionTemperatureFetchEventHandler(const AppEvent &event);
+	static void FunctionRelativeHumidityEventHandler(const AppEvent &event);
+	static void FunctionIlluminanceEventHandler(const AppEvent &event);
 
 	static void ChipEventHandler(const chip::DeviceLayer::ChipDeviceEvent *event, intptr_t arg);
 	static void ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged);
 	static void LEDStateUpdateHandler(LEDWidget &ledWidget);
 	static void FunctionTimerTimeoutCallback(k_timer *timer);
-	static void FunctionSensorTimeoutCallback(k_timer *timer);
+
+	static void TemperatureMeasurementTimeoutCallback(k_timer *timer);
+	static void RelativeHumidityMeasurementTimeoutCallback(k_timer * timer);
+	static void IlluminanceMeasurementTimeoutCallback(k_timer * timer);
+
+	/*static void ActionInitiated(PWMDevice::Action_t action, int32_t actor);
+	static void ActionCompleted(PWMDevice::Action_t action, int32_t actor);*/
 	static void UpdateStatusLED();
 
-	static void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath & attributePath, uint8_t type,
-                                       uint16_t size, uint8_t * value);
 
 	FunctionEvent mFunction = FunctionEvent::NoneSelected;
 	bool mFunctionTimerActive = false;
-
+	//PWMDevice mPWMDevice;
 #if CONFIG_CHIP_FACTORY_DATA
 	chip::DeviceLayer::FactoryDataProvider<chip::DeviceLayer::InternalFlashFactoryData> mFactoryDataProvider;
 #endif

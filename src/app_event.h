@@ -19,12 +19,21 @@ enum class AppEventType : uint8_t {
 	ButtonReleased, 
 	Timer, 
 	UpdateLedState,
-	SensorActivate,
-	SensorDeactivate,
-	SensorFetch
+	SensorFetch,
+	Lighting
 };
 
-enum class FunctionEvent : uint8_t { NoneSelected = 0, FactoryReset };
+enum class AppEventClusterID: uint8_t {
+	None = 0,
+	Temperature = 1,
+	RelativeHumidity = 2,
+	Illuminance = 3
+};
+
+enum class FunctionEvent : uint8_t {
+	NoneSelected = 0, 
+	FactoryReset
+};
 
 struct AppEvent {
 	union {
@@ -41,5 +50,6 @@ struct AppEvent {
 	};
 
 	AppEventType Type{ AppEventType::None };
+	AppEventClusterID Cluster{ AppEventClusterID::None };
 	EventHandler Handler;
 };

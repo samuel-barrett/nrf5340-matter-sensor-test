@@ -53,6 +53,9 @@ void emberAfClusterInitCallback(EndpointId endpoint, ClusterId clusterId)
      case ZCL_IDENTIFY_CLUSTER_ID :
         emberAfIdentifyClusterInitCallback(endpoint);
         break;
+     case ZCL_ILLUMINANCE_MEASUREMENT_CLUSTER_ID :
+        emberAfIlluminanceMeasurementClusterInitCallback(endpoint);
+        break;
      case ZCL_NETWORK_COMMISSIONING_CLUSTER_ID :
         emberAfNetworkCommissioningClusterInitCallback(endpoint);
         break;
@@ -62,11 +65,11 @@ void emberAfClusterInitCallback(EndpointId endpoint, ClusterId clusterId)
      case ZCL_OTA_REQUESTOR_CLUSTER_ID :
         emberAfOtaSoftwareUpdateRequestorClusterInitCallback(endpoint);
         break;
-     case ZCL_ON_OFF_CLUSTER_ID :
-        emberAfOnOffClusterInitCallback(endpoint);
-        break;
      case ZCL_OPERATIONAL_CREDENTIALS_CLUSTER_ID :
         emberAfOperationalCredentialsClusterInitCallback(endpoint);
+        break;
+     case ZCL_RELATIVE_HUMIDITY_MEASUREMENT_CLUSTER_ID :
+        emberAfRelativeHumidityMeasurementClusterInitCallback(endpoint);
         break;
      case ZCL_SOFTWARE_DIAGNOSTICS_CLUSTER_ID :
         emberAfSoftwareDiagnosticsClusterInitCallback(endpoint);
@@ -126,6 +129,11 @@ void __attribute__((weak)) emberAfIdentifyClusterInitCallback(EndpointId endpoin
     // To prevent warning
     (void) endpoint;
 }
+void __attribute__((weak)) emberAfIlluminanceMeasurementClusterInitCallback(EndpointId endpoint)
+{
+    // To prevent warning
+    (void) endpoint;
+}
 void __attribute__((weak)) emberAfNetworkCommissioningClusterInitCallback(EndpointId endpoint)
 {
     // To prevent warning
@@ -141,12 +149,12 @@ void __attribute__((weak)) emberAfOtaSoftwareUpdateRequestorClusterInitCallback(
     // To prevent warning
     (void) endpoint;
 }
-void __attribute__((weak)) emberAfOnOffClusterInitCallback(EndpointId endpoint)
+void __attribute__((weak)) emberAfOperationalCredentialsClusterInitCallback(EndpointId endpoint)
 {
     // To prevent warning
     (void) endpoint;
 }
-void __attribute__((weak)) emberAfOperationalCredentialsClusterInitCallback(EndpointId endpoint)
+void __attribute__((weak)) emberAfRelativeHumidityMeasurementClusterInitCallback(EndpointId endpoint)
 {
     // To prevent warning
     (void) endpoint;

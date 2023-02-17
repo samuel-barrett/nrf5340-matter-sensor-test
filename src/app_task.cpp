@@ -46,48 +46,56 @@ using namespace ::chip::DeviceLayer;
 
 namespace
 {
-constexpr size_t kAppEventQueueSize = 10;
-constexpr uint32_t kFactoryResetTriggerTimeout = 6000;
+	constexpr size_t kAppEventQueueSize = 10;
+	constexpr EndpointId kLightEndpointId = 4;
+	constexpr uint32_t kFactoryResetTriggerTimeout = 6000;
 
-K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
-k_timer sFunctionTimer;
-k_timer sSensorTimer;
+	constexpr uint8_t kDefaultMinLevel = 0;
+	constexpr uint8_t kDefaultMaxLevel = 254;
 
-LEDWidget sStatusLED;
-#if NUMBER_OF_LEDS == 2
-FactoryResetLEDsWrapper<1> sFactoryResetLEDs{ { FACTORY_RESET_SIGNAL_LED } };
-#else
-FactoryResetLEDsWrapper<3> sFactoryResetLEDs{ { FACTORY_RESET_SIGNAL_LED, FACTORY_RESET_SIGNAL_LED1,
-						FACTORY_RESET_SIGNAL_LED2 } };
-#endif
+	K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
+	k_timer sFunctionTimer;
 
-bool sIsNetworkProvisioned = false;
-bool sIsNetworkEnabled = false;
-bool sHaveBLEConnections = false;
+
+	LEDWidget sStatusLED;
+	FactoryResetLEDsWrapper<3> sFactoryResetLEDs{ { FACTORY_RESET_SIGNAL_LED, FACTORY_RESET_SIGNAL_LED1,
+							FACTORY_RESET_SIGNAL_LED2 } };
+
+	bool sIsNetworkProvisioned = false;
+	bool sIsNetworkEnabled = false;
+	bool sHaveBLEConnections = false;
+
+
+	//const struct pwm_dt_spec sLightPwmDevice = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led1));
 } /* namespace */
 
-namespace LedConsts
-{
-namespace StatusLed
-{
-	namespace Unprovisioned
-	{
-		constexpr uint32_t kOn_ms{ 100 };
-		constexpr uint32_t kOff_ms{ kOn_ms };
-	} /* namespace Unprovisioned */
-	namespace Provisioned
-	{
-		constexpr uint32_t kOn_ms{ 50 };
-		constexpr uint32_t kOff_ms{ 950 };
-	} /* namespace Provisioned */
+namespace LedConsts {
+	namespace StatusLed {
+		namespace Unprovisioned {
+			constexpr uint32_t kOn_ms{ 100 };
+			constexpr uint32_t kOff_ms{ kOn_ms };
+		} /* namespace Unprovisioned */
 
-} /* namespace StatusLed */
+		namespace Provisioned {
+			constexpr uint32_t kOn_ms{ 50 };
+			constexpr uint32_t kOff_ms{ 950 };
+		} /* namespace Provisioned */ 
+	} /* namespace StatusLed */
 } /* namespace LedConsts */
 
-#ifdef CONFIG_CHIP_WIFI
-app::Clusters::NetworkCommissioning::Instance
-	sWiFiCommissioningInstance(0, &(NetworkCommissioning::NrfWiFiDriver::Instance()));
-#endif
+namespace Timers {
+	namespace Timers {
+		k_timer sTemperatureSensor;
+		k_timer sRelativeHumiditySensor;
+		k_timer sIlluminanceSensor;
+	}
+
+	namespace FetchPeriodSeconds {
+		constexpr uint32_t sTemperatureSensor{ 10 };
+		constexpr uint32_t sRelativeHumiditySensor{ 10 };
+		constexpr uint32_t sIlluminanceSensor{ 1 };
+	}
+}
 
 CHIP_ERROR AppTask::Init()
 {
@@ -143,6 +151,7 @@ CHIP_ERROR AppTask::Init()
 	LEDWidget::SetStateUpdateCallback(LEDStateUpdateHandler);
 
 	sStatusLED.Init(SYSTEM_STATE_LED);
+	//sIdentifyLED.Init(LIGHTING_STATE_LED);
 
 	UpdateStatusLED();
 
@@ -157,9 +166,26 @@ CHIP_ERROR AppTask::Init()
 	k_timer_init(&sFunctionTimer, &AppTask::FunctionTimerTimeoutCallback, nullptr);
 	k_timer_user_data_set(&sFunctionTimer, this);
 
-	/* Initialize sensor timer */
-	k_timer_init(&sSensorTimer, &AppTask::FunctionSensorTimeoutCallback, nullptr);
-	k_timer_user_data_set(&sSensorTimer, this);
+	/* Initialize sensor timers */
+	k_timer_init(&Timers::Timers::sTemperatureSensor, &AppTask::TemperatureMeasurementTimeoutCallback, nullptr);
+	k_timer_user_data_set(&Timers::Timers::sTemperatureSensor, this);
+	k_timer_start(&Timers::Timers::sTemperatureSensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sTemperatureSensor));
+
+	k_timer_init(&Timers::Timers::sRelativeHumiditySensor, &AppTask::RelativeHumidityMeasurementTimeoutCallback, nullptr);
+	k_timer_user_data_set(&Timers::Timers::sRelativeHumiditySensor, this);
+	k_timer_start(&Timers::Timers::sRelativeHumiditySensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sRelativeHumiditySensor));
+
+	k_timer_init(&Timers::Timers::sIlluminanceSensor, &AppTask::IlluminanceMeasurementTimeoutCallback, nullptr);
+	k_timer_user_data_set(&Timers::Timers::sIlluminanceSensor, this);
+	k_timer_start(&Timers::Timers::sIlluminanceSensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sIlluminanceSensor));
+
+
+	/* Initialize lighting device (PWM) */
+	/*ret = mPWMDevice.Init(&sLightPwmDevice, kDefaultMinLevel, kDefaultMaxLevel, maxLightLevel);
+	if (ret != 0) {
+		return chip::System::MapErrorZephyr(ret);
+	}
+	mPWMDevice.SetCallbacks(ActionInitiated, ActionCompleted);*/
 
 	/* Initialize CHIP server */
 #if CONFIG_CHIP_FACTORY_DATA
@@ -208,6 +234,28 @@ CHIP_ERROR AppTask::StartApp()
 	return CHIP_NO_ERROR;
 }
 
+/*void AppTask::IdentifyStartHandler(Identify *)
+{
+	AppEvent event;
+	event.Type = AppEventType::IdentifyStart;
+	event.Handler = [](const AppEvent &) {
+		Instance().mPWMDevice.SuppressOutput();
+		sIdentifyLED.Blink(LedConsts::kIdentifyBlinkRate_ms);
+	};
+	PostEvent(event);
+}
+
+void AppTask::IdentifyStopHandler(Identify *)
+{
+	AppEvent event;
+	event.Type = AppEventType::IdentifyStop;
+	event.Handler = [](const AppEvent &) {
+		sIdentifyLED.Set(false);
+		Instance().mPWMDevice.ApplyLevel();
+	};
+	PostEvent(event);
+}*/
+
 void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 {
 	AppEvent button_event;
@@ -249,7 +297,8 @@ void AppTask::FunctionTimerEventHandler(const AppEvent &)
 	}
 }
 
-void AppTask::FunctionSensorTimeoutCallback(k_timer * timer) {
+void AppTask::TemperatureMeasurementTimeoutCallback(k_timer * timer) 
+{
 	if (!timer) {
 		return;
 	}
@@ -257,28 +306,55 @@ void AppTask::FunctionSensorTimeoutCallback(k_timer * timer) {
 	AppEvent event;
 	event.Type = AppEventType::SensorFetch;
 	event.TimerEvent.Context = k_timer_user_data_get(timer);
-	event.Handler = FunctionSensorFetchEventHandler;
+	event.Handler = FunctionTemperatureFetchEventHandler;
 	PostEvent(event);
 }
 
-void AppTask::FunctionSensorActivateEventHandler(const AppEvent &event)
+void AppTask::RelativeHumidityMeasurementTimeoutCallback(k_timer * timer)
 {
-	k_timer_start(&sSensorTimer, K_SECONDS(1), K_SECONDS(1));
+	if (!timer) {
+		return;
+	}
+
+	AppEvent event;
+	event.Type = AppEventType::SensorFetch;
+	event.TimerEvent.Context = k_timer_user_data_get(timer);
+	event.Handler = FunctionRelativeHumidityEventHandler;
+	PostEvent(event);
 }
 
-void AppTask::FunctionSensorDeactivateEventHandler(const AppEvent &event)
+void AppTask::IlluminanceMeasurementTimeoutCallback(k_timer * timer)
 {
-	k_timer_stop(&sSensorTimer);
+	if (!timer) {
+		return;
+	}
+
+	AppEvent event;
+	event.Type = AppEventType::SensorFetch;
+	event.TimerEvent.Context = k_timer_user_data_get(timer);
+	event.Handler = FunctionIlluminanceEventHandler;
+	PostEvent(event);
 }
 
-void AppTask::FunctionSensorFetchEventHandler(const AppEvent &event)
+void AppTask::FunctionTemperatureFetchEventHandler(const AppEvent &event)
 {
 	/* Simulate sensor for now */
-	static int16_t celsiusDegrees = 0;
-	++celsiusDegrees;
-	celsiusDegrees %= 40;
 	chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(
-                /* endpoint ID */ 1, /* temperature in 0.01*C */ celsiusDegrees * 100);
+		static_cast<chip::EndpointId>(AppEventClusterID::Temperature), int16_t(rand() % 5000));
+}
+
+void AppTask::FunctionRelativeHumidityEventHandler(const AppEvent &event)
+{
+	/* Simulate sensor for now */
+	chip::app::Clusters::RelativeHumidityMeasurement::Attributes::MeasuredValue::Set(
+		static_cast<chip::EndpointId>(AppEventClusterID::RelativeHumidity), int16_t(rand() % 10000));
+}
+
+void AppTask::FunctionIlluminanceEventHandler(const AppEvent &event)
+{
+	/* Simulate sensor for now */
+	chip::app::Clusters::IlluminanceMeasurement::Attributes::MeasuredValue::Set(
+		static_cast<chip::EndpointId>(AppEventClusterID::Illuminance), int16_t(rand() % 1000));
 }
 
 void AppTask::FunctionHandler(const AppEvent &event)
@@ -379,6 +455,24 @@ void AppTask::StartTimer(uint32_t timeoutInMs)
 	k_timer_start(&sFunctionTimer, K_MSEC(timeoutInMs), K_NO_WAIT);
 }
 
+/*void AppTask::ActionInitiated(PWMDevice::Action_t action, int32_t actor)
+{
+	if (action == PWMDevice::ON_ACTION) {
+		LOG_INF("Turn On Action has been initiated");
+	} else if (action == PWMDevice::OFF_ACTION) {
+		LOG_INF("Turn Off Action has been initiated");
+	}
+}
+
+void AppTask::ActionCompleted(PWMDevice::Action_t action, int32_t actor)
+{
+	if (action == PWMDevice::ON_ACTION) {
+		LOG_INF("Turn On Action has been completed");
+	} else if (action == PWMDevice::OFF_ACTION) {
+		LOG_INF("Turn Off Action has been completed");
+	}
+}*/
+
 void AppTask::PostEvent(const AppEvent &event)
 {
 	if (k_msgq_put(&sAppEventQueue, &event, K_NO_WAIT) != 0) {
@@ -394,3 +488,23 @@ void AppTask::DispatchEvent(const AppEvent &event)
 		LOG_INF("Event received with no handler. Dropping event.");
 	}
 }
+
+/*void AppTask::UpdateClusterState()
+{
+	SystemLayer().ScheduleLambda([this] {
+		/ write the new on/off value /
+		EmberAfStatus status =
+			Clusters::OnOff::Attributes::OnOff::Set(kLightEndpointId, mPWMDevice.IsTurnedOn());
+
+		if (status != EMBER_ZCL_STATUS_SUCCESS) {
+			LOG_ERR("Updating on/off cluster failed: %x", status);
+		}
+
+		/ write the current level /
+		status = Clusters::LevelControl::Attributes::CurrentLevel::Set(kLightEndpointId, mPWMDevice.GetLevel());
+
+		if (status != EMBER_ZCL_STATUS_SUCCESS) {
+			LOG_ERR("Updating level cluster failed: %x", status);
+		}
+	});
+}*/
