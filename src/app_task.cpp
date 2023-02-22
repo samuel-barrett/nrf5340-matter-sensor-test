@@ -7,6 +7,7 @@
 #include "app_task.h"
 #include "app_config.h"
 #include "led_util.h"
+#include "app_driver.h"
 
 #ifdef CONFIG_NET_L2_OPENTHREAD
 #include "thread_util.h"
@@ -37,6 +38,9 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/kernel.h>
 
+#include <zephyr/kernel.h>
+#include <zephyr/drivers/gpio.h>
+
 LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);
 
 using namespace ::chip;
@@ -47,7 +51,6 @@ using namespace ::chip::DeviceLayer;
 namespace
 {
 	constexpr size_t kAppEventQueueSize = 10;
-	constexpr EndpointId kLightEndpointId = 4;
 	constexpr uint32_t kFactoryResetTriggerTimeout = 6000;
 
 	constexpr uint8_t kDefaultMinLevel = 0;
@@ -58,15 +61,13 @@ namespace
 
 
 	LEDWidget sStatusLED;
-	FactoryResetLEDsWrapper<3> sFactoryResetLEDs{ { FACTORY_RESET_SIGNAL_LED, FACTORY_RESET_SIGNAL_LED1,
-							FACTORY_RESET_SIGNAL_LED2 } };
 
 	bool sIsNetworkProvisioned = false;
 	bool sIsNetworkEnabled = false;
 	bool sHaveBLEConnections = false;
 
-
-	//const struct pwm_dt_spec sLightPwmDevice = PWM_DT_SPEC_GET(DT_ALIAS(pwm_led1));
+	I2CDriver bh1750_driver = I2CDriver("bh1750", 0x23);
+	I2CDriver scd30_driver = I2CDriver("scd30", 0x61);
 } /* namespace */
 
 namespace LedConsts {
@@ -85,15 +86,13 @@ namespace LedConsts {
 
 namespace Timers {
 	namespace Timers {
-		k_timer sTemperatureSensor;
-		k_timer sRelativeHumiditySensor;
-		k_timer sIlluminanceSensor;
+		k_timer sSCD30Sensor;
+		k_timer sBH1750Sensor;
 	}
 
 	namespace FetchPeriodSeconds {
-		constexpr uint32_t sTemperatureSensor{ 10 };
-		constexpr uint32_t sRelativeHumiditySensor{ 10 };
-		constexpr uint32_t sIlluminanceSensor{ 1 };
+		constexpr uint32_t sSCD30Sensor{ 20 };
+		constexpr uint32_t sBH1750Sensor{ 2 };
 	}
 }
 
@@ -162,30 +161,34 @@ CHIP_ERROR AppTask::Init()
 		return chip::System::MapErrorZephyr(ret);
 	}
 
+	// Command to power up the sensor and set the measurement mode
+	uint8_t bh1750_init_command[1] = {0x10};
+	
+	err = static_cast<CHIP_ERROR>(bh1750_driver.init(bh1750_init_command, 1));
+	if(err != CHIP_NO_ERROR) {
+		LOG_ERR("Error in BH1750 init");
+		return err;
+	}
+
+	uint8_t scd30_init_command[1] = {0x10};
+	err = static_cast<CHIP_ERROR>(scd30_driver.init(scd30_init_command, 1));
+	if(err != CHIP_NO_ERROR) {
+		LOG_ERR("Error in SCD30 init");
+		return err;
+	}
+
 	/* Initialize function timer */
 	k_timer_init(&sFunctionTimer, &AppTask::FunctionTimerTimeoutCallback, nullptr);
 	k_timer_user_data_set(&sFunctionTimer, this);
 
 	/* Initialize sensor timers */
-	k_timer_init(&Timers::Timers::sTemperatureSensor, &AppTask::TemperatureMeasurementTimeoutCallback, nullptr);
-	k_timer_user_data_set(&Timers::Timers::sTemperatureSensor, this);
-	k_timer_start(&Timers::Timers::sTemperatureSensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sTemperatureSensor));
+	k_timer_init(&Timers::Timers::sSCD30Sensor, &AppTask::SCD30MeasurementTimeoutCallback, nullptr);
+	k_timer_user_data_set(&Timers::Timers::sSCD30Sensor, this);
+	k_timer_start(&Timers::Timers::sSCD30Sensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sSCD30Sensor));
 
-	k_timer_init(&Timers::Timers::sRelativeHumiditySensor, &AppTask::RelativeHumidityMeasurementTimeoutCallback, nullptr);
-	k_timer_user_data_set(&Timers::Timers::sRelativeHumiditySensor, this);
-	k_timer_start(&Timers::Timers::sRelativeHumiditySensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sRelativeHumiditySensor));
-
-	k_timer_init(&Timers::Timers::sIlluminanceSensor, &AppTask::IlluminanceMeasurementTimeoutCallback, nullptr);
-	k_timer_user_data_set(&Timers::Timers::sIlluminanceSensor, this);
-	k_timer_start(&Timers::Timers::sIlluminanceSensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sIlluminanceSensor));
-
-
-	/* Initialize lighting device (PWM) */
-	/*ret = mPWMDevice.Init(&sLightPwmDevice, kDefaultMinLevel, kDefaultMaxLevel, maxLightLevel);
-	if (ret != 0) {
-		return chip::System::MapErrorZephyr(ret);
-	}
-	mPWMDevice.SetCallbacks(ActionInitiated, ActionCompleted);*/
+	k_timer_init(&Timers::Timers::sBH1750Sensor, &AppTask::BH1750MeasurementTimeoutCallback, nullptr);
+	k_timer_user_data_set(&Timers::Timers::sBH1750Sensor, this);
+	k_timer_start(&Timers::Timers::sBH1750Sensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sBH1750Sensor));
 
 	/* Initialize CHIP server */
 #if CONFIG_CHIP_FACTORY_DATA
@@ -234,28 +237,6 @@ CHIP_ERROR AppTask::StartApp()
 	return CHIP_NO_ERROR;
 }
 
-/*void AppTask::IdentifyStartHandler(Identify *)
-{
-	AppEvent event;
-	event.Type = AppEventType::IdentifyStart;
-	event.Handler = [](const AppEvent &) {
-		Instance().mPWMDevice.SuppressOutput();
-		sIdentifyLED.Blink(LedConsts::kIdentifyBlinkRate_ms);
-	};
-	PostEvent(event);
-}
-
-void AppTask::IdentifyStopHandler(Identify *)
-{
-	AppEvent event;
-	event.Type = AppEventType::IdentifyStop;
-	event.Handler = [](const AppEvent &) {
-		sIdentifyLED.Set(false);
-		Instance().mPWMDevice.ApplyLevel();
-	};
-	PostEvent(event);
-}*/
-
 void AppTask::ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged)
 {
 	AppEvent button_event;
@@ -291,13 +272,12 @@ void AppTask::FunctionTimerEventHandler(const AppEvent &)
 		LOG_INF("Factory Reset triggered");
 
 		sStatusLED.Set(true);
-		sFactoryResetLEDs.Set(true);
 
 		chip::Server::GetInstance().ScheduleFactoryReset();
 	}
 }
 
-void AppTask::TemperatureMeasurementTimeoutCallback(k_timer * timer) 
+void AppTask::SCD30MeasurementTimeoutCallback(k_timer * timer) 
 {
 	if (!timer) {
 		return;
@@ -306,11 +286,11 @@ void AppTask::TemperatureMeasurementTimeoutCallback(k_timer * timer)
 	AppEvent event;
 	event.Type = AppEventType::SensorFetch;
 	event.TimerEvent.Context = k_timer_user_data_get(timer);
-	event.Handler = FunctionTemperatureFetchEventHandler;
+	event.Handler = FunctionSCD30FetchEventHandler;
 	PostEvent(event);
 }
 
-void AppTask::RelativeHumidityMeasurementTimeoutCallback(k_timer * timer)
+void AppTask::BH1750MeasurementTimeoutCallback(k_timer * timer)
 {
 	if (!timer) {
 		return;
@@ -319,42 +299,69 @@ void AppTask::RelativeHumidityMeasurementTimeoutCallback(k_timer * timer)
 	AppEvent event;
 	event.Type = AppEventType::SensorFetch;
 	event.TimerEvent.Context = k_timer_user_data_get(timer);
-	event.Handler = FunctionRelativeHumidityEventHandler;
+	event.Handler = FunctionBH1750EventHandler;
 	PostEvent(event);
 }
 
-void AppTask::IlluminanceMeasurementTimeoutCallback(k_timer * timer)
+void AppTask::FunctionSCD30FetchEventHandler(const AppEvent &event)
 {
-	if (!timer) {
-		return;
+	int error;
+	uint8_t data_buffer[6] = {0,0,0,0,0,0};
+	uint8_t data_ready_cmd[1] = {0x0202}; //Command to check if data is ready
+	uint8_t read_cmd[1] = {0x0300}; //
+
+	scd30_driver.write(data_ready_cmd, 1);
+	scd30_driver.read(data_buffer, 1);
+
+	union {
+        uint32_t u32;
+        float f;
+    } tmp;
+
+	float co2, temperature, humidity;
+
+	int data_ready = data_buffer[0];
+	if(data_ready)
+	{
+		scd30_driver.write(read_cmd,1);
+		scd30_driver.read(data_buffer, 6);
+
+		tmp.u32 = ((uint32_t)data_buffer[0] << 16) | data_buffer[1];
+        co2 = tmp.f;
+
+		tmp.u32 = ((uint32_t)data_buffer[2] << 16) | data_buffer[3];
+		temperature = tmp.f;
+
+		tmp.u32 = ((uint32_t)data_buffer[4] << 16) | data_buffer[5];
+		humidity = tmp.f;
+
+		/* Simulate sensor for now */
+		chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(
+			static_cast<chip::EndpointId>(AppEventEndpointID::Temperature), int16_t(temperature*100));
+
+		chip::app::Clusters::RelativeHumidityMeasurement::Attributes::MeasuredValue::Set(
+			static_cast<chip::EndpointId>(AppEventEndpointID::RelativeHumidity), int16_t(humidity*100));
+
 	}
-
-	AppEvent event;
-	event.Type = AppEventType::SensorFetch;
-	event.TimerEvent.Context = k_timer_user_data_get(timer);
-	event.Handler = FunctionIlluminanceEventHandler;
-	PostEvent(event);
 }
 
-void AppTask::FunctionTemperatureFetchEventHandler(const AppEvent &event)
-{
-	/* Simulate sensor for now */
-	chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(
-		static_cast<chip::EndpointId>(AppEventClusterID::Temperature), int16_t(rand() % 5000));
-}
 
-void AppTask::FunctionRelativeHumidityEventHandler(const AppEvent &event)
+void AppTask::FunctionBH1750EventHandler(const AppEvent &event)
 {
-	/* Simulate sensor for now */
-	chip::app::Clusters::RelativeHumidityMeasurement::Attributes::MeasuredValue::Set(
-		static_cast<chip::EndpointId>(AppEventClusterID::RelativeHumidity), int16_t(rand() % 10000));
-}
+	int error;
+	uint8_t data_buffer[2] = {0,0};
 
-void AppTask::FunctionIlluminanceEventHandler(const AppEvent &event)
-{
-	/* Simulate sensor for now */
+	// Read the actual sensor value using the BH1750 driver
+	error = bh1750_driver.read(data_buffer, 2);
+    if (error < 0) {
+        printk("I2C: Error in i2c_read transfer: %d\n", error);
+    }
+
+    // The received data is in lux, represented as a 16-bit value in big-endian format
+	int lux =  ((data_buffer[0] << 8) | data_buffer[1]) / 1.2;
+
 	chip::app::Clusters::IlluminanceMeasurement::Attributes::MeasuredValue::Set(
-		static_cast<chip::EndpointId>(AppEventClusterID::Illuminance), int16_t(rand() % 1000));
+		static_cast<chip::EndpointId>(AppEventEndpointID::Illuminance), lux);
 }
 
 void AppTask::FunctionHandler(const AppEvent &event)
@@ -367,7 +374,7 @@ void AppTask::FunctionHandler(const AppEvent &event)
 		Instance().mFunction = FunctionEvent::FactoryReset;
 	} else if (event.ButtonEvent.Action == static_cast<uint8_t>(AppEventType::ButtonReleased)) {
 		if (Instance().mFunction == FunctionEvent::FactoryReset) {
-			sFactoryResetLEDs.Set(false);
+			//sFactoryResetLEDs.Set(false);
 			UpdateStatusLED();
 			Instance().CancelTimer();
 			Instance().mFunction = FunctionEvent::NoneSelected;
@@ -455,23 +462,6 @@ void AppTask::StartTimer(uint32_t timeoutInMs)
 	k_timer_start(&sFunctionTimer, K_MSEC(timeoutInMs), K_NO_WAIT);
 }
 
-/*void AppTask::ActionInitiated(PWMDevice::Action_t action, int32_t actor)
-{
-	if (action == PWMDevice::ON_ACTION) {
-		LOG_INF("Turn On Action has been initiated");
-	} else if (action == PWMDevice::OFF_ACTION) {
-		LOG_INF("Turn Off Action has been initiated");
-	}
-}
-
-void AppTask::ActionCompleted(PWMDevice::Action_t action, int32_t actor)
-{
-	if (action == PWMDevice::ON_ACTION) {
-		LOG_INF("Turn On Action has been completed");
-	} else if (action == PWMDevice::OFF_ACTION) {
-		LOG_INF("Turn Off Action has been completed");
-	}
-}*/
 
 void AppTask::PostEvent(const AppEvent &event)
 {
@@ -488,23 +478,3 @@ void AppTask::DispatchEvent(const AppEvent &event)
 		LOG_INF("Event received with no handler. Dropping event.");
 	}
 }
-
-/*void AppTask::UpdateClusterState()
-{
-	SystemLayer().ScheduleLambda([this] {
-		/ write the new on/off value /
-		EmberAfStatus status =
-			Clusters::OnOff::Attributes::OnOff::Set(kLightEndpointId, mPWMDevice.IsTurnedOn());
-
-		if (status != EMBER_ZCL_STATUS_SUCCESS) {
-			LOG_ERR("Updating on/off cluster failed: %x", status);
-		}
-
-		/ write the current level /
-		status = Clusters::LevelControl::Attributes::CurrentLevel::Set(kLightEndpointId, mPWMDevice.GetLevel());
-
-		if (status != EMBER_ZCL_STATUS_SUCCESS) {
-			LOG_ERR("Updating level cluster failed: %x", status);
-		}
-	});
-}*/

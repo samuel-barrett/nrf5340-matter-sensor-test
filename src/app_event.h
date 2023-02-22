@@ -23,11 +23,12 @@ enum class AppEventType : uint8_t {
 	Lighting
 };
 
-enum class AppEventClusterID: uint8_t {
+enum class AppEventEndpointID: uint8_t {
 	None = 0,
 	Temperature = 1,
 	RelativeHumidity = 2,
-	Illuminance = 3
+	Illuminance = 3,
+	Light = 4
 };
 
 enum class FunctionEvent : uint8_t {
@@ -50,6 +51,6 @@ struct AppEvent {
 	};
 
 	AppEventType Type{ AppEventType::None };
-	AppEventClusterID Cluster{ AppEventClusterID::None };
+	AppEventEndpointID Cluster{ AppEventEndpointID::None };
 	EventHandler Handler;
 };
