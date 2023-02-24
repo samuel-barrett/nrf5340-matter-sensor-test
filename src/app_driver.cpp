@@ -15,11 +15,15 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/device.h>
 
+#include <zephyr/logging/log.h>
+
 #include <cstring>
 
 // SCD30 I2C address
 #define SCD30_I2C_ADDR 0x61
 #define BH1750_I2C_ADDR 0x23
+
+LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);
 
 /**
  * @brief BH1750 I2C Device driver class. Suitable for reading lux values when requested. 
@@ -35,23 +39,23 @@ BH1750Driver::BH1750Driver(std::string name)
     // Get I2C device
     if (spec.bus == NULL)
     {
-        printk("Failed to get I2C device\n");
+        LOG_ERR("Failed to get I2C device");
     } else
     {
-        printk("Binded to device %s\n", spec.bus->name);
+        LOG_INF("Binded to device %s", spec.bus->name);
     }
 
     if (spec.addr != I2C_ADDR) {
-        printk("Address not set properly\n");
+        LOG_ERR("Address not set properly");
     }
 
     i2c_configure(spec.bus, I2C_SPEED_SET(I2C_SPEED_STANDARD));
-    printk("Value of NRF_TWIM2_->PSEL.SCL : %d \n",NRF_TWIM2->PSEL.SCL);
-    printk("Value of NRF_TWIM2->PSEL.SDA : %d \n",NRF_TWIM2->PSEL.SDA);
-    printk("Value of NRF_TWIM2->FREQUENCY: %d \n",NRF_TWIM2->FREQUENCY);
-    printk("26738688 -> 100k\n");
+    LOG_INF("Value of NRF_TWIM2_->PSEL.SCL : %d",NRF_TWIM2->PSEL.SCL);
+    LOG_INF("Value of NRF_TWIM2->PSEL.SDA : %d",NRF_TWIM2->PSEL.SDA);
+    LOG_INF("Value of NRF_TWIM2->FREQUENCY: %d",NRF_TWIM2->FREQUENCY);
+    LOG_INF("26738688 -> 100k");
 
-    printk("spec.bus->name: %s, spec.addr: %d\n", spec.bus->name, spec.addr);
+    LOG_INF("spec.bus->name: %s, spec.addr: %d", spec.bus->name, spec.addr);
 }
 
 /**
@@ -81,7 +85,7 @@ int BH1750Driver::write(uint8_t * tx_buf, size_t tx_buf_size)
     int error = i2c_write_dt(&spec, tx_buf, tx_buf_size);
     if(error < 0)
     {
-        printk("I2C: Error in i2c_write transfer: %d\n", error);
+        LOG_ERR("I2C: Error in i2c_write transfer: %d", error);
     }
     return error;
 }
@@ -95,7 +99,7 @@ int BH1750Driver::read(uint16_t * lux)
     error = i2c_read_dt(&spec, value, num_bytes);
     if (error < 0) 
     {
-        printk("I2C: Error in i2c_read transfer: %d\n", error);
+        LOG_ERR("I2C: Error in i2c_read transfer: %d", error);
     }
 
     *lux = ((value[0] << 8) | value[1]) / CONV_FACTOR;
@@ -117,23 +121,23 @@ SCD30Driver::SCD30Driver(std::string name)
     // Get I2C device
     if (spec.bus == NULL)
     {
-        printk("Failed to get I2C device\n");
+        LOG_ERR("Failed to get I2C device");
     } else
     {
-        printk("Binded to device %s\n", spec.bus->name);
+        LOG_INF("Binded to device %s", spec.bus->name);
     }
 
     if (spec.addr != I2C_ADDR) {
-        printk("Address not set properly\n");
+        LOG_ERR("Address not set properly");
     }
 
     i2c_configure(spec.bus, I2C_SPEED_SET(I2C_SPEED_STANDARD));
-    printk("Value of NRF_TWIM1_->PSEL.SCL : %d \n",NRF_TWIM1->PSEL.SCL);
-    printk("Value of NRF_TWIM1->PSEL.SDA : %d \n",NRF_TWIM1->PSEL.SDA);
-    printk("Value of NRF_TWIM1->FREQUENCY: %d \n",NRF_TWIM1->FREQUENCY);
-    printk("26738688 -> 100k\n");
+    LOG_INF("Value of NRF_TWIM1_->PSEL.SCL : %d ",NRF_TWIM1->PSEL.SCL);
+    LOG_INF("Value of NRF_TWIM1->PSEL.SDA : %d ",NRF_TWIM1->PSEL.SDA);
+    LOG_INF("Value of NRF_TWIM1->FREQUENCY: %d ",NRF_TWIM1->FREQUENCY);
+    LOG_INF("26738688 -> 100k");
 
-    printk("spec.bus->name: %s, spec.addr: %d\n", spec.bus->name, spec.addr);
+    LOG_INF("spec.bus->name: %s, spec.addr: %d", spec.bus->name, spec.addr);
 }
 
 /**
@@ -150,17 +154,17 @@ int SCD30Driver::init()
     ret = read_firmware_version(&version);
     if(ret)
     {
-        printk("Error reading firmware version: %d\n", ret);
+        LOG_ERR("Error reading firmware version: %d", ret);
         return ret;
     }
 
-    printk("SCD30 Firmware Version: %d.%d\n", (version >> 8) & 0xf, version & 0xf);
+    LOG_INF("SCD30 Firmware Version: %d.%d", (version >> 8) & 0xf, version & 0xf);
 
-    printk("Starting continuous measurement\n");
+    LOG_INF("Starting continuous measurement");
     ret = trigger_continuous_measurement(0);
     if(ret)
     {
-        printk("Could not start continuous measurement\n");
+        LOG_ERR("Could not start continuous measurement");
     }
     k_sleep(K_MSEC(2000));
     return ret;
@@ -182,17 +186,17 @@ int SCD30Driver::get_data_ready_status(bool * data_ready)
     ret = execute_cmd(CMD_GET_DATA_READY_STATUS, 1, NULL, 0, &status, 1);
     if (ret) 
     {
-        printk("Failed to check if data is ready\n");
+        LOG_ERR("Failed to check if data is ready");
         return ret;
     }
 
     *data_ready = (status != 0);
     if (*data_ready)
     {
-        printk("Data ready...\n");
+        LOG_INF("Data ready...");
     } else 
     {
-        printk("Data not ready | status: %u\n", status);
+        LOG_ERR("Data not ready | status: %u", status);
     }
     return 0;
 }
@@ -221,7 +225,7 @@ int SCD30Driver::read_measurement(float *co2, float *temperature, float *humidit
 
     if (ret)
     {
-        printk("Failed to send read measurement command\n");
+        LOG_ERR("Failed to send read measurement command");
         return ret;
     }
     if (co2)
@@ -251,7 +255,7 @@ int SCD30Driver::read_resp(uint16_t *data, size_t words)
     
     i2c_read_dt(&spec, buf, sizeof(buf));
 
-    printk("Received buffer...\n");
+    LOG_INF("Received buffer...");
 
     for (size_t i = 0; i < words; i++)
     {
@@ -259,7 +263,7 @@ int SCD30Driver::read_resp(uint16_t *data, size_t words)
         uint8_t crc = crc8(p, 2);
         if (crc != *(p + 2))
         {
-            printk("Invalid CRC 0x%02x, expected 0x%02x\n", crc, *(p + 2));
+            LOG_ERR("Invalid CRC 0x%02x, expected 0x%02x", crc, *(p + 2));
             return -1;
         }
         data[i] = swap(*(uint16_t *)p);
@@ -276,7 +280,7 @@ int SCD30Driver::execute_cmd(uint16_t cmd, uint32_t timeout_ms,
     ret = send_cmd(cmd, out_data, out_words);
     if(ret)
     {
-        printk("Failed to send cmd in execute_cmd\n");
+        LOG_ERR("Failed to send cmd in execute_cmd");
         return ret;
     }
 
@@ -290,7 +294,7 @@ int SCD30Driver::execute_cmd(uint16_t cmd, uint32_t timeout_ms,
         ret = read_resp(in_data, in_words);
         if(ret)
         {
-            printk("Failed to read response in execute_cmd\n");
+            LOG_ERR("Failed to read response in execute_cmd");
             return ret;
         }
     }
@@ -307,10 +311,10 @@ int SCD30Driver::trigger_continuous_measurement(uint16_t p_comp)
 {
     if(p_comp == 0 || (p_comp >= 700 && p_comp <= 1400)) 
     {
-        printk("p_comp valid\n");
+        LOG_INF("p_comp valid");
     } else
     {
-        printk("p_comp invalid\n");
+        LOG_ERR("p_comp invalid");
         return p_comp;
     }
 
@@ -354,7 +358,7 @@ int SCD30Driver::send_cmd(uint16_t cmd, uint16_t *data, size_t words)
             *(p + 2) = crc8(p, 2);
         }
 
-    printk("Sending buffer...\n");
+    LOG_INF("Sending buffer...");
 
     return i2c_write_dt(&spec, buf, sizeof(buf));
 }

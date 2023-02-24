@@ -11,9 +11,6 @@
 
 #include <platform/CHIPDeviceLayer.h>
 
-#if CONFIG_CHIP_FACTORY_DATA
-#include <platform/nrfconnect/FactoryDataProvider.h>
-#endif
 
 struct k_timer;
 
@@ -56,7 +53,4 @@ private:
 	FunctionEvent mFunction = FunctionEvent::NoneSelected;
 	//I2CDriver bh1750_driver("bh1750", 0x10);
 	bool mFunctionTimerActive = false;
-#if CONFIG_CHIP_FACTORY_DATA
-	chip::DeviceLayer::FactoryDataProvider<chip::DeviceLayer::InternalFlashFactoryData> mFactoryDataProvider;
-#endif
 };
