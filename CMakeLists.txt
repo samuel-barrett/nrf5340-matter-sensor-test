@@ -24,7 +24,7 @@ endif()
 
 find_package(Zephyr HINTS $ENV{ZEPHYR_BASE})
 
-project(matter-template)
+project(matter-nrf-sensor-test)
 
 set(COMMON_ROOT ${ZEPHYR_NRF_MODULE_DIR}/samples/matter/common)
 set(NLIO_ROOT ${MATTER_MODULE_ROOT}/third_party/nlio/repo)

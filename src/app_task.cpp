@@ -66,8 +66,9 @@ namespace
 	bool sIsNetworkEnabled = false;
 	bool sHaveBLEConnections = false;
 
-	I2CDriver bh1750_driver = I2CDriver("bh1750", 0x23);
-	I2CDriver scd30_driver = I2CDriver("scd30", 0x61);
+	BH1750Driver bh1750_driver = BH1750Driver("bh1750");
+	SCD30Driver scd30_driver = SCD30Driver("scd30");
+
 } /* namespace */
 
 namespace LedConsts {
@@ -162,16 +163,15 @@ CHIP_ERROR AppTask::Init()
 	}
 
 	// Command to power up the sensor and set the measurement mode
-	uint8_t bh1750_init_command[1] = {0x10};
+	/*uint8_t bh1750_init_command[1] = {0x10};
 	
 	err = static_cast<CHIP_ERROR>(bh1750_driver.init(bh1750_init_command, 1));
 	if(err != CHIP_NO_ERROR) {
 		LOG_ERR("Error in BH1750 init");
 		return err;
-	}
+	}*/
 
-	uint8_t scd30_init_command[1] = {0x10};
-	err = static_cast<CHIP_ERROR>(scd30_driver.init(scd30_init_command, 1));
+	err = static_cast<CHIP_ERROR>(scd30_driver.init());
 	if(err != CHIP_NO_ERROR) {
 		LOG_ERR("Error in SCD30 init");
 		return err;
@@ -305,35 +305,29 @@ void AppTask::BH1750MeasurementTimeoutCallback(k_timer * timer)
 
 void AppTask::FunctionSCD30FetchEventHandler(const AppEvent &event)
 {
-	int error;
-	uint8_t data_buffer[6] = {0,0,0,0,0,0};
-	uint8_t data_ready_cmd[1] = {0x0202}; //Command to check if data is ready
-	uint8_t read_cmd[1] = {0x0300}; //
+	bool data_ready = false;
+	float co2 = 0.0, temperature = 0.0, humidity = 0.0;
+	int ret;
 
-	scd30_driver.write(data_ready_cmd, 1);
-	scd30_driver.read(data_buffer, 1);
+	ret = scd30_driver.get_data_ready_status(&data_ready);
+    if(ret) {
+        printk("Could not check data ready status\n");
+        return;
+    }
 
-	union {
-        uint32_t u32;
-        float f;
-    } tmp;
-
-	float co2, temperature, humidity;
-
-	int data_ready = data_buffer[0];
 	if(data_ready)
 	{
-		scd30_driver.write(read_cmd,1);
-		scd30_driver.read(data_buffer, 6);
+		ret = scd30_driver.read_measurement(&co2, &temperature, &humidity);
+		if(ret) {
+			printk("Error reading sensor data\n");
+			return;
+		}
 
-		tmp.u32 = ((uint32_t)data_buffer[0] << 16) | data_buffer[1];
-        co2 = tmp.f;
-
-		tmp.u32 = ((uint32_t)data_buffer[2] << 16) | data_buffer[3];
-		temperature = tmp.f;
-
-		tmp.u32 = ((uint32_t)data_buffer[4] << 16) | data_buffer[5];
-		humidity = tmp.f;
+        if (co2 == 0)
+        {
+            printk("Invalid co2 sample detected, skipping\n");
+			return;
+        }
 
 		/* Simulate sensor for now */
 		chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(
@@ -352,10 +346,10 @@ void AppTask::FunctionBH1750EventHandler(const AppEvent &event)
 	uint8_t data_buffer[2] = {0,0};
 
 	// Read the actual sensor value using the BH1750 driver
-	error = bh1750_driver.read(data_buffer, 2);
+	/*error = bh1750_driver.read(data_buffer, 2);
     if (error < 0) {
         printk("I2C: Error in i2c_read transfer: %d\n", error);
-    }
+    }*/
 
     // The received data is in lux, represented as a 16-bit value in big-endian format
 	int lux =  ((data_buffer[0] << 8) | data_buffer[1]) / 1.2;
