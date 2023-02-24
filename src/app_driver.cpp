@@ -15,24 +15,43 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/device.h>
 
+#include <cstring>
+
+// SCD30 I2C address
+#define SCD30_I2C_ADDR 0x61
+#define BH1750_I2C_ADDR 0x23
+
 /**
  * @brief BH1750 I2C Device driver class. Suitable for reading lux values when requested. 
  * 
  * @param name I2C device name, as listed in i2c board overlay
  */
-BH1750Driver::BH1750Driver(std::string name) :
+BH1750Driver::BH1750Driver(std::string name)
     : spec{
         .bus = device_get_binding(name.c_str()), 
-        .addr = I2C_ADDR
+        .addr = BH1750_I2C_ADDR
     }
 {   
-    if (!spec.bus)
+    // Get I2C device
+    if (spec.bus == NULL)
     {
-        printk("I2C: Device driver not found.\n");
+        printk("Failed to get I2C device\n");
     } else
     {
-        printk("Binded to device %s\n", i2c_dev->name);
+        printk("Binded to device %s\n", spec.bus->name);
     }
+
+    if (spec.addr != I2C_ADDR) {
+        printk("Address not set properly\n");
+    }
+
+    i2c_configure(spec.bus, I2C_SPEED_SET(I2C_SPEED_STANDARD));
+    printk("Value of NRF_TWIM2_->PSEL.SCL : %d \n",NRF_TWIM2->PSEL.SCL);
+    printk("Value of NRF_TWIM2->PSEL.SDA : %d \n",NRF_TWIM2->PSEL.SDA);
+    printk("Value of NRF_TWIM2->FREQUENCY: %d \n",NRF_TWIM2->FREQUENCY);
+    printk("26738688 -> 100k\n");
+
+    printk("spec.bus->name: %s, spec.addr: %d\n", spec.bus->name, spec.addr);
 }
 
 /**
@@ -46,19 +65,6 @@ int BH1750Driver::init()
 {
     int error;
     uint8_t init_command[] = { CMD_TRIGGER_MEASUREMENT_MODE };
-
-    /* Demonstration of runtime configuration */
-    error = i2c_configure(spec.bus, I2C_SPEED_SET(I2C_SPEED_STANDARD));
-    
-    if(error < 0) {
-        printk("I2C: Error in i2c_configure %d\n", error);
-        return error;
-    }
-
-    printk("Value of NRF_TWIM2->PSEL.SCL : %d \n",NRF_TWIM1->PSEL.SCL);
-    printk("Value of NRF_TWIM2->PSEL.SDA : %d \n",NRF_TWIM1->PSEL.SDA);
-    printk("Value of NRF_TWIM2->FREQUENCY: %d \n",NRF_TWIM1->FREQUENCY);
-    printk("26738688 -> 100k\n");
 
     return write(init_command, 1);
 }
@@ -83,10 +89,10 @@ int BH1750Driver::write(uint8_t * tx_buf, size_t tx_buf_size)
 int BH1750Driver::read(uint16_t * lux) 
 {
     int error;
+    const uint32_t num_bytes = 2;
     uint8_t value[2];
-    size_t num_bytes;
 
-    error = i2c_read_dt(spec, value, num_bytes);
+    error = i2c_read_dt(&spec, value, num_bytes);
     if (error < 0) 
     {
         printk("I2C: Error in i2c_read transfer: %d\n", error);
@@ -105,23 +111,29 @@ int BH1750Driver::read(uint16_t * lux)
 SCD30Driver::SCD30Driver(std::string name)
     : spec{
         .bus = device_get_binding(name.c_str()), 
-        .addr = I2C_ADDR
+        .addr = SCD30_I2C_ADDR
     }
 {
     // Get I2C device
-    if (!spec.bus)
+    if (spec.bus == NULL)
     {
         printk("Failed to get I2C device\n");
     } else
     {
-        printk("Binded to device %s\n", i2c_dev->name);
+        printk("Binded to device %s\n", spec.bus->name);
+    }
+
+    if (spec.addr != I2C_ADDR) {
+        printk("Address not set properly\n");
     }
 
     i2c_configure(spec.bus, I2C_SPEED_SET(I2C_SPEED_STANDARD));
-    printk("Value of NRF_TWIM2->PSEL.SCL : %d \n",NRF_TWIM2->PSEL.SCL);
-    printk("Value of NRF_TWIM2->PSEL.SDA : %d \n",NRF_TWIM2->PSEL.SDA);
-    printk("Value of NRF_TWIM2->FREQUENCY: %d \n",NRF_TWIM2->FREQUENCY);
+    printk("Value of NRF_TWIM1_->PSEL.SCL : %d \n",NRF_TWIM1->PSEL.SCL);
+    printk("Value of NRF_TWIM1->PSEL.SDA : %d \n",NRF_TWIM1->PSEL.SDA);
+    printk("Value of NRF_TWIM1->FREQUENCY: %d \n",NRF_TWIM1->FREQUENCY);
     printk("26738688 -> 100k\n");
+
+    printk("spec.bus->name: %s, spec.addr: %d\n", spec.bus->name, spec.addr);
 }
 
 /**
@@ -197,38 +209,40 @@ int SCD30Driver::get_data_ready_status(bool * data_ready)
  */
 int SCD30Driver::read_measurement(float *co2, float *temperature, float *humidity)
 {
+    union {
+        uint32_t u32;
+        float f;
+    } tmp;
+
     uint16_t buf[6];
     int ret;
 
     ret = execute_cmd(CMD_READ_MEASUREMENT, 3, NULL, 0, buf, 6);
+
     if (ret)
     {
-        printk("Failed to semd read measurement command\n");
+        printk("Failed to send read measurement command\n");
         return ret;
     }
-
-    // Copy buffer conrtents into co2, temperature, and humidity values
     if (co2)
     {
-        uint32_t tmp;
-        memcpy(&tmp, &buf[0], sizeof(uint32_t));
-        *co2 = *reinterpret_cast<float*>(&tmp);
+        tmp.u32 = ((uint32_t)buf[0] << 16) | buf[1];
+        *co2 = tmp.f;
     }
     if (temperature)
     {
-        uint32_t tmp;
-        memcpy(&tmp, &buf[2], sizeof(uint32_t));
-        *temperature = *reinterpret_cast<float*>(&tmp);
+        tmp.u32 = ((uint32_t)buf[2] << 16) | buf[3];
+        *temperature = tmp.f;
     }
     if (humidity)
     {
-        uint32_t tmp;
-        memcpy(&tmp, &buf[4], sizeof(uint32_t));
-        *humidity = *reinterpret_cast<float*>(&tmp);
+        tmp.u32 = ((uint32_t)buf[4] << 16) | buf[5];
+        *humidity = tmp.f;
     }
 
     return 0;
 }
+
 
 
 int SCD30Driver::read_resp(uint16_t *data, size_t words)

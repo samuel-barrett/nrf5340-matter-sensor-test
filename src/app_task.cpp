@@ -161,15 +161,12 @@ CHIP_ERROR AppTask::Init()
 		LOG_ERR("dk_buttons_init() failed");
 		return chip::System::MapErrorZephyr(ret);
 	}
-
-	// Command to power up the sensor and set the measurement mode
-	/*uint8_t bh1750_init_command[1] = {0x10};
 	
-	err = static_cast<CHIP_ERROR>(bh1750_driver.init(bh1750_init_command, 1));
+	err = static_cast<CHIP_ERROR>(bh1750_driver.init());
 	if(err != CHIP_NO_ERROR) {
 		LOG_ERR("Error in BH1750 init");
 		return err;
-	}*/
+	}
 
 	err = static_cast<CHIP_ERROR>(scd30_driver.init());
 	if(err != CHIP_NO_ERROR) {
@@ -329,12 +326,14 @@ void AppTask::FunctionSCD30FetchEventHandler(const AppEvent &event)
 			return;
         }
 
+		printk("Setting temp to: %d and humidity to %d\n",static_cast<uint16_t>(temperature*100), static_cast<uint16_t>(humidity*100));
+
 		/* Simulate sensor for now */
 		chip::app::Clusters::TemperatureMeasurement::Attributes::MeasuredValue::Set(
-			static_cast<chip::EndpointId>(AppEventEndpointID::Temperature), int16_t(temperature*100));
+			static_cast<chip::EndpointId>(AppEventEndpointID::Temperature), static_cast<uint16_t>(temperature*100));
 
 		chip::app::Clusters::RelativeHumidityMeasurement::Attributes::MeasuredValue::Set(
-			static_cast<chip::EndpointId>(AppEventEndpointID::RelativeHumidity), int16_t(humidity*100));
+			static_cast<chip::EndpointId>(AppEventEndpointID::RelativeHumidity), static_cast<uint16_t>(humidity*100));
 
 	}
 }
@@ -343,16 +342,12 @@ void AppTask::FunctionSCD30FetchEventHandler(const AppEvent &event)
 void AppTask::FunctionBH1750EventHandler(const AppEvent &event)
 {
 	int error;
-	uint8_t data_buffer[2] = {0,0};
+	uint16_t lux;
 
-	// Read the actual sensor value using the BH1750 driver
-	/*error = bh1750_driver.read(data_buffer, 2);
+	error = bh1750_driver.read(&lux);
     if (error < 0) {
         printk("I2C: Error in i2c_read transfer: %d\n", error);
-    }*/
-
-    // The received data is in lux, represented as a 16-bit value in big-endian format
-	int lux =  ((data_buffer[0] << 8) | data_buffer[1]) / 1.2;
+    }
 
 	chip::app::Clusters::IlluminanceMeasurement::Attributes::MeasuredValue::Set(
 		static_cast<chip::EndpointId>(AppEventEndpointID::Illuminance), lux);

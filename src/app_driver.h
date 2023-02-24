@@ -2,6 +2,7 @@
 #pragma once
 
 #include <string>
+#include <zephyr/drivers/i2c.h>
 
 
 class BH1750Driver
@@ -14,11 +15,11 @@ public:
 private:
     int write(uint8_t * cmd, size_t buf_size);
 
-    const struct i2c_dt_spec spec;
+    struct i2c_dt_spec spec;
 
-    const int I2C_ADDR=0x23;
-    const int CMD_TRIGGER_MEASUREMENT_MODE=0x10;
-    const float CONV_FACTOR = 1.2
+    const uint16_t I2C_ADDR=0x23;
+    const uint8_t CMD_TRIGGER_MEASUREMENT_MODE=0x10;
+    const float CONV_FACTOR = 1.2;
 };
 
 
@@ -40,19 +41,19 @@ private:
     int read_firmware_version(uint16_t *firmware_version);
     int trigger_continuous_measurement(uint16_t p_comp);
 
-    const struct i2c_dt_spec spec;
+    struct i2c_dt_spec spec;
 
-    const int I2C_ADDR=0x61;
+    const uint16_t I2C_ADDR=0x61;
 
-    const int CMD_TRIGGER_CONTINUOUS_MEASUREMENT=0x0010;
-    const int CMD_STOP_CONTINUOUS_MEASUREMENT=0x0104;
-    const int CMD_SET_MEASUREMENT_INTERVAL=0x4600;
-    const int CMD_GET_DATA_READY_STATUS=0x0202;
-    const int CMD_READ_MEASUREMENT=0x0300;
-    const int CMD_ACTIVATE_AUTOMATIC_SELF_CALIBRATION=0x5306;
-    const int CMD_SET_FORCED_RECALIBRATION_VALUE=0x5204;
-    const int CMD_SET_TEMPERATURE_OFFSET=0x5403;
-    const int CMD_ALTITUDE_COMPENSATION=0x5102;
-    const int CMD_READ_FIRMWARE_VERSION=0xD100;
-    const int CMD_SOFT_RESET=0xD304;
+    const uint16_t CMD_TRIGGER_CONTINUOUS_MEASUREMENT=0x0010;
+    const uint16_t CMD_STOP_CONTINUOUS_MEASUREMENT=0x0104;
+    const uint16_t CMD_SET_MEASUREMENT_uint16_tERVAL=0x4600;
+    const uint16_t CMD_GET_DATA_READY_STATUS=0x0202;
+    const uint16_t CMD_READ_MEASUREMENT=0x0300;
+    const uint16_t CMD_ACTIVATE_AUTOMATIC_SELF_CALIBRATION=0x5306;
+    const uint16_t CMD_SET_FORCED_RECALIBRATION_VALUE=0x5204;
+    const uint16_t CMD_SET_TEMPERATURE_OFFSET=0x5403;
+    const uint16_t CMD_ALTITUDE_COMPENSATION=0x5102;
+    const uint16_t CMD_READ_FIRMWARE_VERSION=0xD100;
+    const uint16_t CMD_SOFT_RESET=0xD304;
 };
