@@ -12,6 +12,21 @@
 #include <platform/CHIPDeviceLayer.h>
 
 
+#ifndef CHECK
+#define CHECK(x, ...) ({ \
+    int __ = x; \
+    if (__) { \
+        LOG_ERR(__VA_ARGS__); \
+        return __; \
+    } \
+})
+#endif
+
+#ifndef LOGGING_MODULE_DECLARATION
+#define LOGGING_MODULE_DECLARATION
+LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);
+#endif
+
 struct k_timer;
 
 class AppTask {

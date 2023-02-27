@@ -37,8 +37,6 @@ using namespace ::chip::app;
 using namespace ::chip::Credentials;
 using namespace ::chip::DeviceLayer;
 
-LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);
-
 namespace
 {
 	constexpr size_t kAppEventQueueSize = 10;
