@@ -129,7 +129,10 @@ CHIP_ERROR AppTask::Init()
 
 	ReturnErrorOnFailure(chip::Server::GetInstance().Init(initParams));
 	ConfigurationMgr().LogDeviceConfig();
-	PrintOnboardingCodes(chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
+
+	//QR code is currently wrong it appears, so avoid printing for now
+	//TODO: Figure out how to print proper QR Code
+	//PrintOnboardingCodes(chip::RendezvousInformationFlags(chip::RendezvousInformationFlag::kBLE));
 
 	/*
 	 * Add CHIP event handler and start CHIP thread.

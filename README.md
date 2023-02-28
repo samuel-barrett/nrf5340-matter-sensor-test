@@ -12,8 +12,8 @@ The sample is developed for the NRF5340DK, but other similar boards, could likel
 
 It uses two sensor:
 
-* SCD30: This sample uses the SCD30 CO2, temperature, and relative humidity sensor for the temperature and humidity readings. It communicates over I2C
-* BH1750: 
+* SCD30: This sample uses the SCD30 CO2, temperature, and relative humidity sensor for the temperature and humidity readings. It communicates over I2C protocol, and is configured to use pins P1.3 for SCL and P1.2 for SDA
+* BH1750: The BH1750 illuminance sensor is used to update the matter illuminance attribute. It also uses the I2C protocol, and is configure to use pins P1.15 for SCL and P1.14 for SDA.
 
 If you want to commission the light bulb device and control it remotely, you also need a Matter controller device configured on PC or mobile.
 
@@ -48,13 +48,13 @@ Complete the following steps to bind both devices:
 
 ## Commissioning the device
 
-To commission the device, go to the :ref:`ug_matter_gs_testing` page and complete the steps for the Matter over Thread or Matter over Wi-Fi development environment and the Matter controller you want to use.
+To commission the device, go to the [Testing Matter in the nRF Connect SDK](https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/protocols/matter/getting_started/testing/index.html#ug-matter-gs-testing) page and complete the steps for the Matter over Thread or Matter over Wi-Fi development environment and the Matter controller you want to use.
 After choosing the environment configuration, the guide walks you through the following steps:
 
 * Configure the Thread Border Router (only for Matter over Thread communication).
 * Build and install the Matter controller.
 * Commission the device.
-* Send Matter commands that cover scenarios described in the `Testing`_ section.
+* Send Matter commands that cover scenarios described in the [testing](https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/samples/matter/light_bulb/README.html#testing) section.
 
 Before starting the commissioning procedure, the device must be made discoverable over Bluetooth LE.
 The device becomes discoverable automatically upon the device startup, but only for a predefined period of time (15 minutes by default).
