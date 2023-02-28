@@ -22,6 +22,16 @@
 })
 #endif
 
+#ifndef CHECK_RET_VOID
+#define CHECK_RET_VOID(x, ...) ({ \
+    int __ = x; \
+    if (__) { \
+        LOG_ERR(__VA_ARGS__); \
+        return; \
+    } \
+})
+#endif
+
 #ifndef LOGGING_MODULE_DECLARATION
 #define LOGGING_MODULE_DECLARATION
 LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);

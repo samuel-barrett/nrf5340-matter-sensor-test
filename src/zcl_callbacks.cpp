@@ -26,6 +26,10 @@ void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath & 
     if (attributePath.mClusterId == OnOff::Id && attributePath.mAttributeId == OnOff::Attributes::OnOff::Id) {
         gpio_pin_set_dt(&led, *value);
         LOG_INF("MatterPostAttributechangeCallback GPIO setting value to: %d\n", *value);
+
+        //Reset illuminance attribute value
+        chip::app::Clusters::IlluminanceMeasurement::Attributes::MeasuredValue::Set(
+				static_cast<chip::EndpointId>(AppEventEndpointID::Illuminance), 0);
     }
 }
 

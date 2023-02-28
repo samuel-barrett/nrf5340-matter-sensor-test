@@ -12,6 +12,7 @@
 #include "thread_util.h"
 
 #include <platform/CHIPDeviceLayer.h>
+#include <zephyr/drivers/gpio.h>
 
 #include "board_util.h"
 #include <app-common/zap-generated/attributes/Accessors.h>
@@ -41,33 +42,34 @@ namespace
 {
 	constexpr size_t kAppEventQueueSize = 10;
 
-
 	K_MSGQ_DEFINE(sAppEventQueue, sizeof(AppEvent), kAppEventQueueSize, alignof(AppEvent));
 
 	bool sIsNetworkProvisioned = false;
 	bool sIsNetworkEnabled = false;
 	bool sHaveBLEConnections = false;
 
-	BH1750Driver bh1750_driver = BH1750Driver("bh1750");
-	SCD30Driver scd30_driver = SCD30Driver("scd30");
+	BH1750Driver bh1750_driver("bh1750");
+	SCD30Driver scd30_driver("scd30");
 
 } /* namespace */
 
 namespace Timers 
 {
-	namespace Timers 
-	{
-		k_timer sSCD30Sensor;
-		k_timer sBH1750Sensor;
-	}
+	k_timer sSCD30Sensor;
+	k_timer sBH1750Sensor;
 
 	namespace FetchPeriodSeconds 
 	{
 		constexpr uint32_t sSCD30Sensor{ 20 };
 		constexpr uint32_t sBH1750Sensor{ 2 };
-	}
-}
+	} /* FetchPeriodSeconds */
+} /* Timers */
 
+/**
+ * @brief Initialize chip stack
+ * 
+ * @return CHIP_ERROR 
+ */
 CHIP_ERROR AppTask::Init()
 {
 	/* Initialize CHIP stack */
@@ -112,13 +114,13 @@ CHIP_ERROR AppTask::Init()
 	}
 
 	/* Initialize sensor timers */
-	k_timer_init(&Timers::Timers::sSCD30Sensor, &AppTask::SCD30MeasurementTimeoutCallback, nullptr);
-	k_timer_user_data_set(&Timers::Timers::sSCD30Sensor, this);
-	k_timer_start(&Timers::Timers::sSCD30Sensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sSCD30Sensor));
+	k_timer_init(&Timers::sSCD30Sensor, &AppTask::SCD30MeasurementTimeoutCallback, nullptr);
+	k_timer_user_data_set(&Timers::sSCD30Sensor, this);
+	k_timer_start(&Timers::sSCD30Sensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sSCD30Sensor));
 
-	k_timer_init(&Timers::Timers::sBH1750Sensor, &AppTask::BH1750MeasurementTimeoutCallback, nullptr);
-	k_timer_user_data_set(&Timers::Timers::sBH1750Sensor, this);
-	k_timer_start(&Timers::Timers::sBH1750Sensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sBH1750Sensor));
+	k_timer_init(&Timers::sBH1750Sensor, &AppTask::BH1750MeasurementTimeoutCallback, nullptr);
+	k_timer_user_data_set(&Timers::sBH1750Sensor, this);
+	k_timer_start(&Timers::sBH1750Sensor, K_NO_WAIT, K_SECONDS(Timers::FetchPeriodSeconds::sBH1750Sensor));
 
 	SetDeviceAttestationCredentialsProvider(Examples::GetExampleDACProvider());
 
@@ -145,13 +147,19 @@ CHIP_ERROR AppTask::Init()
 	return CHIP_NO_ERROR;
 }
 
+/**
+ * @brief Call init and then get and dispatch message events in a loop
+ * 
+ * @return (CHIP_ERROR) Return any error value upon initialization. Otherwise it should not return.
+ */
 CHIP_ERROR AppTask::StartApp()
 {
 	ReturnErrorOnFailure(Init());
 
 	AppEvent event = {};
 
-	while (true) {
+	while (true)
+	{
 		k_msgq_get(&sAppEventQueue, &event, K_FOREVER);
 		DispatchEvent(event);
 	}
@@ -159,24 +167,14 @@ CHIP_ERROR AppTask::StartApp()
 	return CHIP_NO_ERROR;
 }
 
-void AppTask::FunctionTimerTimeoutCallback(k_timer *timer)
-{
-	if (!timer) {
-		return;
-	}
-
-	AppEvent event;
-	event.Type = AppEventType::Timer;
-	event.TimerEvent.Context = k_timer_user_data_get(timer);
-	event.Handler = FunctionTimerEventHandler;
-	PostEvent(event);
-}
-
+/**
+ * @brief Callback function for SCD30 timer timeout. Adds SCD30 sensor reading function to event queue
+ * 
+ * @param timer (k_timer *) Pointer to timer from which callback is called.
+ */
 void AppTask::SCD30MeasurementTimeoutCallback(k_timer * timer) 
 {
-	if (!timer) {
-		return;
-	}
+	if (!timer) return;
 
 	AppEvent event;
 	event.Type = AppEventType::SensorFetch;
@@ -185,11 +183,14 @@ void AppTask::SCD30MeasurementTimeoutCallback(k_timer * timer)
 	PostEvent(event);
 }
 
+/**
+ * @brief Callback function for BH1750 timer timeout. Adds BH1750 sensor reading function to event queue
+ * 
+ * @param timer (k_timer *) Pointer to timer from which callback is called.
+ */
 void AppTask::BH1750MeasurementTimeoutCallback(k_timer * timer)
 {
-	if (!timer) {
-		return;
-	}
+	if (!timer) return;
 
 	AppEvent event;
 	event.Type = AppEventType::SensorFetch;
@@ -198,31 +199,25 @@ void AppTask::BH1750MeasurementTimeoutCallback(k_timer * timer)
 	PostEvent(event);
 }
 
+
+/**
+ * @brief Reads SCD30 co2, temperature, humidity, and update the corrresponding matter attribute. If the on/off led is on,
+ * then the SCD30 co2 reading is placed in the illuminance attribute (matter does not currently support CO2 readings). 
+ * 
+ * @param event (const AppEvent &event) event type
+ */
 void AppTask::FunctionSCD30FetchEventHandler(const AppEvent &event)
 {
 	bool data_ready = false;
 	float co2 = 0.0, temperature = 0.0, humidity = 0.0;
 	int ret;
 
-	ret = scd30_driver.get_data_ready_status(&data_ready);
-    if(ret) {
-        LOG_ERR("Could not check data ready status");
-        return;
-    }
+	CHECK_RET_VOID(scd30_driver.get_data_ready_status(&data_ready), "Could not check data ready status");
 
 	if(data_ready)
 	{
-		ret = scd30_driver.read_measurement(&co2, &temperature, &humidity);
-		if(ret) {
-			LOG_ERR("Error reading sensor data");
-			return;
-		}
-
-        if (co2 == 0)
-        {
-            LOG_ERR("Invalid co2 sample detected, skipping");
-			return;
-        }
+		CHECK_RET_VOID(scd30_driver.read_measurement(&co2, &temperature, &humidity), "Error reading sensor data");
+        CHECK_RET_VOID(co2 == 0, "Invalid co2 sample detected, skipping attribute updates");
 
 		LOG_INF("Setting temp to: %d and humidity to %d",static_cast<uint16_t>(temperature*100), static_cast<uint16_t>(humidity*100));
 
@@ -233,25 +228,45 @@ void AppTask::FunctionSCD30FetchEventHandler(const AppEvent &event)
 		chip::app::Clusters::RelativeHumidityMeasurement::Attributes::MeasuredValue::Set(
 			static_cast<chip::EndpointId>(AppEventEndpointID::RelativeHumidity), static_cast<uint16_t>(humidity*100.0));
 
+		//Put co2 values in illuminance attribute if on/off light is on, otherwise lux will be used
+		if(gpio_pin_get_dt(&led))
+		{
+			chip::app::Clusters::IlluminanceMeasurement::Attributes::MeasuredValue::Set(
+				static_cast<chip::EndpointId>(AppEventEndpointID::Illuminance), co2);
+		}
+
 	}
 }
 
-
+/**
+ * @brief Reads BH1750 lux value, and updates the corrresponding matter attribute. If the on/off led is on,
+ * then the SCD30 co2 reading is placed in the illuminance attribute (matter does not currently support CO2 readings). 
+ * 
+ * @param event (const AppEvent &event) event type
+ */
 void AppTask::FunctionBH1750EventHandler(const AppEvent &event)
 {
 	int error;
 	uint16_t lux;
 
-	error = bh1750_driver.read(&lux);
-    if (error < 0) {
-        LOG_ERR("I2C: Error in i2c_read transfer: %d", error);
+	//Putting SCD30 CO2 values in illuminance matter attribute instead if onoff light is on
+	if(gpio_pin_get_dt(&led))
+	{
 		return;
-    }
+	}
+
+	CHECK_RET_VOID(bh1750_driver.read(&lux), "I2C: Error in i2c_read transfer: %d", error);
 
 	chip::app::Clusters::IlluminanceMeasurement::Attributes::MeasuredValue::Set(
 		static_cast<chip::EndpointId>(AppEventEndpointID::Illuminance), lux);
 }
 
+/**
+ * @brief Handle chip events such as a bluetooth adveritising change, or a thread state change.
+ * 
+ * @param event (const ChipDeviceEvent *event) Chip event type. Currently kCHIPoBLEAdvertisingChange, kDnssdPlatformInitialized,
+ * kThreadStateChange are handled.
+ */
 void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 {
 	switch (event->Type) {
@@ -270,19 +285,22 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 	}
 }
 
-
+/**
+ * @brief 
+ * 
+ * @param event (const AppEvent &event)  
+ */
 void AppTask::PostEvent(const AppEvent &event)
 {
-	if (k_msgq_put(&sAppEventQueue, &event, K_NO_WAIT) != 0) {
-		LOG_INF("Failed to post event to app task event queue");
-	}
+	CHECK_RET_VOID(k_msgq_put(&sAppEventQueue, &event, K_NO_WAIT) != 0, 
+		"Failed to post event to app task event queue");
 }
 
+/**
+ * 
+*/
 void AppTask::DispatchEvent(const AppEvent &event)
 {
-	if (event.Handler) {
-		event.Handler(event);
-	} else {
-		LOG_INF("Event received with no handler. Dropping event.");
-	}
+	CHECK_RET_VOID(!(event.Handler), "Event received with no handler. Dropping event.");
+	event.Handler(event);
 }

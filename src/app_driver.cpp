@@ -21,7 +21,7 @@
  * 
  * @param name I2C device name, as listed in i2c board overlay
  */
-BH1750Driver::BH1750Driver(std::string name)
+BH1750Driver::BH1750Driver(const std::string name)
     : spec{
         .bus = device_get_binding(name.c_str()), 
         .addr = I2C_ADDR
@@ -48,7 +48,9 @@ BH1750Driver::BH1750Driver(std::string name)
  * 
  * @param init_command (uint8_t *) 
  * @param buf_size 
- * @return int 
+ * 
+ * @retval 0 If successful.
+ * @retval -EIO General input / output error.
  */
 int BH1750Driver::init()
 {
@@ -61,23 +63,18 @@ int BH1750Driver::init()
 
     uint8_t init_command[] = { CMD_TRIGGER_MEASUREMENT_MODE };
 
-    return write(init_command, 1);
-}
-
-/**
- * @brief Write a command to the 
- * 
- * @param tx_buf 
- * @param tx_buf_size 
- * @return int 
- */
-int BH1750Driver::write(uint8_t * tx_buf, size_t tx_buf_size)
-{
-    CHECK(i2c_write_dt(&spec, tx_buf, tx_buf_size), 
-        "I2C: Error in i2c_write transfer");
+    CHECK(i2c_write_dt(&spec, init_command, 1), "I2C: Error in i2c_write transfer");
     return 0;
 }
 
+/**
+ * @brief Read a value from the BH1750 device, convert to lux, and return.
+ * 
+ * @param lux (uint16_t *) [out] 
+ * 
+ * @retval 0 If successful.
+ * @retval -EIO General input / output error.
+ */
 int BH1750Driver::read(uint16_t * lux) 
 {
     const uint32_t num_bytes = 2;
@@ -96,7 +93,7 @@ int BH1750Driver::read(uint16_t * lux)
  * 
  * @param name (std::string) Name in board overlay i2c definition
  */
-SCD30Driver::SCD30Driver(std::string name)
+SCD30Driver::SCD30Driver(const std::string name)
     : spec{
         .bus = device_get_binding(name.c_str()), 
         .addr = I2C_ADDR
@@ -163,7 +160,7 @@ int SCD30Driver::read_firmware_version(uint16_t *firmware_version)
 }
 
 /**
- * @brief 
+ * @brief Sends command to SCD30 device to trigger continuous mesasurement. 
  * 
  * @param p_comp (uint16_t) TODO: Figure out what this param is 
  * 
@@ -367,7 +364,7 @@ uint8_t SCD30Driver::crc8(const uint8_t * data, size_t count)
  * @param v (uint16) Word to swap
  * @return (uint16_t) Swapped word
  */
-uint16_t SCD30Driver::swap(uint16_t v)
+inline uint16_t SCD30Driver::swap(uint16_t v)
 {
     return (v << 8) | (v >> 8);
 }

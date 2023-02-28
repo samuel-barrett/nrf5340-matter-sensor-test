@@ -15,6 +15,16 @@
 })
 #endif
 
+#ifndef CHECK_RET_VOID
+#define CHECK_RET_VOID(x, ...) ({ \
+    int __ = x; \
+    if (__) { \
+        LOG_ERR(__VA_ARGS__); \
+        return; \
+    } \
+})
+#endif
+
 #ifndef LOGGING_MODULE_DECLARATION
 #define LOGGING_MODULE_DECLARATION
 LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);
@@ -23,14 +33,12 @@ LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);
 class BH1750Driver
 {
 public:
-    BH1750Driver (std::string name);
+    BH1750Driver (const std::string name);
 
     int init();
     int read(uint16_t * lux);
 private:
-    int write(uint8_t * cmd, size_t buf_size);
-
-    struct i2c_dt_spec spec;
+    const struct i2c_dt_spec spec;
 
     static constexpr uint16_t I2C_ADDR=0x23;
     static constexpr uint8_t CMD_TRIGGER_MEASUREMENT_MODE=0x10;
@@ -41,14 +49,14 @@ private:
 class SCD30Driver
 {
 public:
-    SCD30Driver (std::string name);
+    SCD30Driver (const std::string name);
 
     int init();
     int get_data_ready_status(bool * data_ready);
     int read_measurement(float *co2, float *temperature, float *humidity);
 private:
     uint8_t crc8(const uint8_t *data, size_t count);
-    uint16_t swap(uint16_t v);
+    inline uint16_t swap(uint16_t v);
     int send_cmd(uint16_t cmd, uint16_t *data, size_t words);
     int read_resp(uint16_t *data, size_t words);
     int execute_cmd(const uint16_t cmd, uint32_t timeout_ms,
@@ -56,7 +64,7 @@ private:
     int read_firmware_version(uint16_t *firmware_version);
     int trigger_continuous_measurement(uint16_t p_comp);
 
-    struct i2c_dt_spec spec;
+    const struct i2c_dt_spec spec;
 
     static constexpr uint16_t I2C_ADDR=0x61;
  
