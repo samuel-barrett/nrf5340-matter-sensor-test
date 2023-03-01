@@ -44,7 +44,7 @@ After building this sample and the Matter light switch sample and programming th
 
 ## Bind both devices
 
-Complete the following steps to bind both devices:
+Complete the following steps to bind both devices: 
 
 ## Commissioning the device
 
@@ -69,7 +69,8 @@ For this sample, you can use one of the following onboarding information formats
 
 | QR Code   | QR Code Payload   | Manual pairing code   |
 | ---       | ---               | ---                   |
-| ![](./docs/images/matter_qr_code.png) | MT:6FCJ142C00KA0648G00 | 34970112332 |
+| ![](./docs/images/matter_commision_qr_code.png) | MT:6FCJ142C00KA0648G00 | 34970112332 |
+| ![]() | MT:Y.K9042C00KA0648G00 | 
 
 
 ## Dependencies
@@ -77,10 +78,8 @@ For this sample, you can use one of the following onboarding information formats
 This sample uses the Matter library that includes the |NCS| platform integration layer:
 
 In addition, it uses the [Matter](https://csa-iot.org/all-solutions/matter/) standard from the Connectivity Standards Alliance. 
-* :ref:`nfc_uri`
-* :ref:`lib_nfc_t2t`
 
 The sample depends on the following Zephyr libraries:
 
-* :ref:`zephyr:logging_api`
-* :ref:`zephyr:kernel_api`
+* [Logging](https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/zephyr/services/logging/index.html#logging-api)
+* [Kernel](https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/zephyr/kernel/services/index.html#kernel-api)

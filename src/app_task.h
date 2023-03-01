@@ -16,7 +16,7 @@
 #define CHECK(x, ...) ({ \
     int __ = x; \
     if (__) { \
-        LOG_ERR(__VA_ARGS__); \
+        LOG_ERR("ERR #%d: %s", x, __VA_ARGS__); \
         return __; \
     } \
 })
@@ -26,7 +26,7 @@
 #define CHECK_RET_VOID(x, ...) ({ \
     int __ = x; \
     if (__) { \
-        LOG_ERR(__VA_ARGS__); \
+        LOG_ERR(__VA_ARGS__" ERROR #%d", x); \
         return; \
     } \
 })
@@ -73,9 +73,4 @@ private:
 	static void BH1750MeasurementTimeoutCallback(k_timer * timer);
 
 	static void UpdateStatusLED();
-
-
-	FunctionEvent mFunction = FunctionEvent::NoneSelected;
-	//I2CDriver bh1750_driver("bh1750", 0x10);
-	bool mFunctionTimerActive = false;
 };

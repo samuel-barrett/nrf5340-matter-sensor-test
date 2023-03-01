@@ -101,16 +101,14 @@ CHIP_ERROR AppTask::Init()
 		return err;
 	}
 
-	err = static_cast<CHIP_ERROR>(bh1750_driver.init());
-	if(err != CHIP_NO_ERROR) {
+	if(bh1750_driver.init()) {
 		LOG_ERR("Error in BH1750 init");
-		return err;
+		return CHIP_ERROR_NOT_CONNECTED;
 	}
 
-	err = static_cast<CHIP_ERROR>(scd30_driver.init());
-	if(err != CHIP_NO_ERROR) {
+	if(scd30_driver.init()) {
 		LOG_ERR("Error in SCD30 init");
-		return err;
+		return CHIP_ERROR_NOT_CONNECTED;
 	}
 
 	/* Initialize sensor timers */
@@ -213,7 +211,6 @@ void AppTask::FunctionSCD30FetchEventHandler(const AppEvent &event)
 {
 	bool data_ready = false;
 	float co2 = 0.0, temperature = 0.0, humidity = 0.0;
-	int ret;
 
 	CHECK_RET_VOID(scd30_driver.get_data_ready_status(&data_ready), "Could not check data ready status");
 
@@ -249,16 +246,12 @@ void AppTask::FunctionSCD30FetchEventHandler(const AppEvent &event)
  */
 void AppTask::FunctionBH1750EventHandler(const AppEvent &event)
 {
-	int error;
 	uint16_t lux;
 
 	//Putting SCD30 CO2 values in illuminance matter attribute instead if onoff light is on
-	if(gpio_pin_get_dt(&led))
-	{
-		return;
-	}
+	if(gpio_pin_get_dt(&led)) return;
 
-	CHECK_RET_VOID(bh1750_driver.read(&lux), "I2C: Error in i2c_read transfer: %d", error);
+	CHECK_RET_VOID(bh1750_driver.read(&lux), "Error in i2c_read transfer");
 
 	chip::app::Clusters::IlluminanceMeasurement::Attributes::MeasuredValue::Set(
 		static_cast<chip::EndpointId>(AppEventEndpointID::Illuminance), lux);

@@ -9,7 +9,7 @@
 #define CHECK(x, ...) ({ \
     int __ = x; \
     if (__) { \
-        LOG_ERR(__VA_ARGS__); \
+        LOG_ERR(__VA_ARGS__" ERROR #%d", x); \
         return __; \
     } \
 })
@@ -19,7 +19,7 @@
 #define CHECK_RET_VOID(x, ...) ({ \
     int __ = x; \
     if (__) { \
-        LOG_ERR(__VA_ARGS__); \
+        LOG_ERR(__VA_ARGS__" ERROR #%d", x); \
         return; \
     } \
 })

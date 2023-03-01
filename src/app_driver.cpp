@@ -326,7 +326,7 @@ int SCD30Driver::read_resp(uint16_t *data, size_t words)
         uint8_t *p = buf + i * 3;
         uint8_t crc = crc8(p, 2);
         
-        CHECK(crc != *(p + 2), "Invalid CRC 0x%02x, expected 0x%02x", crc, *(p + 2));
+        CHECK(crc != *(p + 2), "Invalid CRC");
 
         data[i] = swap(*(uint16_t *)p);
     }
