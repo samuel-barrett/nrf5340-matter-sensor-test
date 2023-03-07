@@ -76,6 +76,7 @@ CHIP_ERROR AppTask::Init()
 	LOG_INF("Init CHIP stack");
 
 	CHIP_ERROR err = chip::Platform::MemoryInit();
+
 	if (err != CHIP_NO_ERROR) 
 	{
 		LOG_ERR("Platform::MemoryInit() failed");
@@ -110,6 +111,7 @@ CHIP_ERROR AppTask::Init()
 		LOG_ERR("Error in SCD30 init");
 		return CHIP_ERROR_NOT_CONNECTED;
 	}
+
 
 	/* Initialize sensor timers */
 	k_timer_init(&Timers::sSCD30Sensor, &AppTask::SCD30MeasurementTimeoutCallback, nullptr);
@@ -201,6 +203,7 @@ void AppTask::BH1750MeasurementTimeoutCallback(k_timer * timer)
 }
 
 
+
 /**
  * @brief Reads SCD30 co2, temperature, humidity, and update the corrresponding matter attribute. If the on/off led is on,
  * then the SCD30 co2 reading is placed in the illuminance attribute (matter does not currently support CO2 readings). 
@@ -234,7 +237,6 @@ void AppTask::FunctionSCD30FetchEventHandler(const AppEvent &event)
 			chip::app::Clusters::IlluminanceMeasurement::Attributes::MeasuredValue::Set(
 				static_cast<chip::EndpointId>(AppEventEndpointID::Illuminance), co2);
 		}
-
 	}
 }
 
@@ -249,7 +251,11 @@ void AppTask::FunctionBH1750EventHandler(const AppEvent &event)
 	uint16_t lux;
 
 	//Putting SCD30 CO2 values in illuminance matter attribute instead if onoff light is on
-	if(gpio_pin_get_dt(&led)) return;
+	if(gpio_pin_get_dt(&led))
+	{
+		return;
+	}
+
 
 	CHECK_RET_VOID(bh1750_driver.read(&lux), "Error in i2c_read transfer");
 
@@ -282,20 +288,22 @@ void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 }
 
 /**
- * @brief 
+ * @brief Post event in the message queue
  * 
- * @param event (const AppEvent &event)  
+ * @param event (const AppEvent &) Event handler
  */
-void AppTask::PostEvent(const AppEvent &event)
+void AppTask::PostEvent(const AppEvent & event)
 {
 	CHECK_RET_VOID(k_msgq_put(&sAppEventQueue, &event, K_NO_WAIT) != 0, 
 		"Failed to post event to app task event queue");
 }
 
 /**
+ * @brief Dispatch the event by passing the event to the event
  * 
-*/
-void AppTask::DispatchEvent(const AppEvent &event)
+ * @param event (const AppEvent &) Event handler
+ */
+void AppTask::DispatchEvent(const AppEvent & event)
 {
 	CHECK_RET_VOID(!(event.Handler), "Event received with no handler. Dropping event.");
 	event.Handler(event);

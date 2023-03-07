@@ -39,6 +39,18 @@ LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);
 
 struct k_timer;
 
+class ButtonDriver
+{
+public:
+	enum Action_t: uint8_t
+	{
+		ON_ACTION = 0,
+		OFF_ACTION = 1,
+		
+		INVALID_ACTION
+	};
+};
+
 class AppTask {
 public:
 	static AppTask &Instance()

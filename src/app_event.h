@@ -32,6 +32,14 @@ enum class AppEventEndpointID: uint8_t {
 struct AppEvent {
 	union {
 		struct {
+			uint8_t PinNo;
+			uint8_t Action;
+		} ButtonEvent;
+		struct {
+			uint8_t Action;
+			int32_t Actor;
+		} LightingEvent;
+		struct {
 			void *Context;
 		} TimerEvent;
 	};
