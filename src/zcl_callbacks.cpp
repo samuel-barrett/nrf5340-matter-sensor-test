@@ -20,6 +20,14 @@ using namespace ::chip;
 using namespace ::chip::app::Clusters;
 using namespace ::chip::app::Clusters::OnOff;
 
+/**
+ * @brief 
+ * 
+ * @param attributePath 
+ * @param type 
+ * @param size 
+ * @param value 
+ */
 void MatterPostAttributeChangeCallback(const chip::app::ConcreteAttributePath & attributePath, uint8_t type,
                                        uint16_t size, uint8_t * value)
 {

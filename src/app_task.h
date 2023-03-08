@@ -37,20 +37,6 @@
 LOG_MODULE_DECLARE(app, CONFIG_MATTER_LOG_LEVEL);
 #endif
 
-struct k_timer;
-
-class ButtonDriver
-{
-public:
-	enum Action_t: uint8_t
-	{
-		ON_ACTION = 0,
-		OFF_ACTION = 1,
-		
-		INVALID_ACTION
-	};
-};
-
 class AppTask {
 public:
 	static AppTask &Instance()
@@ -60,29 +46,13 @@ public:
 	};
 
 	CHIP_ERROR StartApp();
-
 	static void PostEvent(const AppEvent &event);
-
 private:
 	CHIP_ERROR Init();
-
-	void CancelTimer();
-	void StartTimer(uint32_t timeoutInMs);
-
 	static void DispatchEvent(const AppEvent &event);
-	static void UpdateLedStateEventHandler(const AppEvent &event);
-	static void FunctionHandler(const AppEvent &event);
-	static void FunctionTimerEventHandler(const AppEvent &event);
 	static void FunctionSCD30FetchEventHandler(const AppEvent &event);
 	static void FunctionBH1750EventHandler(const AppEvent &event);
-
-	static void ChipEventHandler(const chip::DeviceLayer::ChipDeviceEvent *event, intptr_t arg);
-	static void ButtonEventHandler(uint32_t buttonState, uint32_t hasChanged);
-	static void LEDStateUpdateHandler(LEDWidget &ledWidget);
-	static void FunctionTimerTimeoutCallback(k_timer *timer);
-
 	static void SCD30MeasurementTimeoutCallback(k_timer *timer);
 	static void BH1750MeasurementTimeoutCallback(k_timer * timer);
-
-	static void UpdateStatusLED();
+	static void ChipEventHandler(const chip::DeviceLayer::ChipDeviceEvent *event, intptr_t arg);
 };
