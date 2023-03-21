@@ -33,18 +33,17 @@ The sample contains four different attributes. A temperature, humidity, lux, on/
 ## Remote testing in a network
 
 * By default, the Matter accessory device has no IPv6 network configured.
-* You must pair it with the Matter controller over Bluetooth® LE to get the configuration from the controller to use the device within a Thread or Wi-Fi network.
-* The controller must get the onboarding information from the Matter accessory device and provision the device into the network.
-* For details, see the commissioning the device section.
 
+* You must pair it with the Matter controller over Bluetooth® LE to get the configuration from the controller to use the device within a Thread or Wi-Fi network.
+
+* The controller must get the onboarding information from the Matter accessory device and provision the device into the network.
+
+* For details, see the commissioning the device section.
 
 ## Testing communication with another device
 
 After building this sample and the Matter light switch sample and programming them to the development kits, complete the steps in the following sections to test communication between both devices.
 
-## Bind both devices
-
-Complete the following steps to bind both devices: 
 
 ## Commissioning the device
 

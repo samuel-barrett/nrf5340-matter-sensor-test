@@ -256,7 +256,6 @@ void AppTask::FunctionBH1750EventHandler(const AppEvent &event)
 		return;
 	}
 
-
 	CHECK_RET_VOID(bh1750_driver.read(&lux), "Error in i2c_read transfer");
 
 	chip::app::Clusters::IlluminanceMeasurement::Attributes::MeasuredValue::Set(
@@ -271,19 +270,23 @@ void AppTask::FunctionBH1750EventHandler(const AppEvent &event)
  */
 void AppTask::ChipEventHandler(const ChipDeviceEvent *event, intptr_t /* arg */)
 {
-	switch (event->Type) {
-	case DeviceEventType::kCHIPoBLEAdvertisingChange:
-		sHaveBLEConnections = ConnectivityMgr().NumBLEConnections() != 0;
-		break;
-	case DeviceEventType::kDnssdPlatformInitialized:
-		InitBasicOTARequestor();
-		break;
-	case DeviceEventType::kThreadStateChange:
-		sIsNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned();
-		sIsNetworkEnabled = ConnectivityMgr().IsThreadEnabled();
-		break;
-	default:
-		break;
+	switch (event->Type)
+	{
+		case DeviceEventType::kCHIPoBLEAdvertisingChange:
+			sHaveBLEConnections = ConnectivityMgr().NumBLEConnections() != 0;
+			break;
+
+		case DeviceEventType::kDnssdPlatformInitialized:
+			InitBasicOTARequestor();
+			break;
+
+		case DeviceEventType::kThreadStateChange:
+			sIsNetworkProvisioned = ConnectivityMgr().IsThreadProvisioned();
+			sIsNetworkEnabled = ConnectivityMgr().IsThreadEnabled();
+			break;
+			
+		default:
+			break;
 	}
 }
 
